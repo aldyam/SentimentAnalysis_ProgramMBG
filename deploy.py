@@ -15,8 +15,8 @@ def load_models():
     # Pastikan file model ada di folder yang sama atau sesuaikan path-nya
     # Karena di GitHub nanti strukturnya rata, biasanya langsung panggil nama file
     try:
-        model = joblib.load('model/model_nb.pkl') 
-        vectorizer = joblib.load('model/vectorizer_tfidf.pkl')
+        model = joblib.load('Model/model_nb.pkl') 
+        vectorizer = joblib.load('Model/vectorizer_tfidf.pkl')
         return model, vectorizer
     except:
         return None, None
