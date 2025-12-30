@@ -16,9 +16,9 @@ st.set_page_config(page_title="Analisis Emosi Makan Gratis", page_icon="🍲", l
 def load_resources():
     try:
         # Load Model Deep Learning (.h5)
-        model = load_model('model_lstm.h5') 
+        model = load_model('Model/model_lstm.h5') 
         # Load Tokenizer (.pkl)
-        tokenizer = joblib.load('tokenizer_lstm.pkl')
+        tokenizer = joblib.load('Model/tokenizer_lstm.pkl')
         return model, tokenizer
     except Exception as e:
         return None, None
