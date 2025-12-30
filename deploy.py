@@ -1,27 +1,32 @@
 import streamlit as st
 import joblib
-import pandas as pd
-import re
 import numpy as np
+import re
+import tensorflow as tf
+from tensorflow.keras.models import load_model
+from tensorflow.keras.preprocessing.sequence import pad_sequences
 from Sastrawi.StopWordRemover.StopWordRemoverFactory import StopWordRemoverFactory
 from Sastrawi.Stemmer.StemmerFactory import StemmerFactory
 
 # --- 1. SETUP HALAMAN ---
-st.set_page_config(page_title="Analisis Sentimen Makan Gratis", page_icon="🍲")
+st.set_page_config(page_title="Analisis Emosi LSTM", page_icon="🧠")
 
-# --- 2. FUNGSI CACHING (Agar model tidak diload berulang kali) ---
+# --- 2. FUNGSI CACHING (Load Model LSTM & Tokenizer) ---
 @st.cache_resource
-def load_models():
-    # Pastikan file model ada di folder yang sama atau sesuaikan path-nya
-    # Karena di GitHub nanti strukturnya rata, biasanya langsung panggil nama file
+def load_resources():
     try:
-        model = joblib.load('Model/model_nb.pkl') 
-        vectorizer = joblib.load('Model/vectorizer_tfidf.pkl')
-        return model, vectorizer
-    except:
+        # Load Model Deep Learning (.h5)
+        model = load_model('Model/model_lstm.h5') # Pastikan path sesuai lokasi file
+        
+        # Load Tokenizer (.pkl)
+        tokenizer = joblib.load('Model/tokenizer_lstm.pkl')
+        
+        return model, tokenizer
+    except Exception as e:
+        st.error(f"Error loading model: {e}")
         return None, None
 
-model, vectorizer = load_models()
+model, tokenizer = load_resources()
 
 # --- 3. PREPROCESSING ---
 factory_sw = StopWordRemoverFactory()
@@ -40,41 +45,57 @@ def clean_text(text):
     text = stemmer.stem(text) 
     return text
 
-# --- 4. TAMPILAN UI (STREAMLIT) ---
-st.title("🍲 Analisis Emosi: Program Makan Gratis")
-st.write("Aplikasi ini menggunakan AI (Naive Bayes) untuk mendeteksi emosi masyarakat.")
+# --- 4. TAMPILAN UI ---
+st.title("🧠 AI Deteksi Emosi (LSTM Model)")
+st.write("Aplikasi ini menggunakan **Deep Learning (Akurasi ~88%)** untuk membaca emosi program Makan Gratis.")
 
-user_input = st.text_area("Masukkan komentar/pendapat:", height=100)
+user_input = st.text_area("Masukkan komentar/pendapat:", height=100, placeholder="Contoh: Program ini sangat membantu anak-anak sekolah...")
 
 if st.button("Analisis Emosi"):
-    if user_input and model is not None:
-        with st.spinner("Sedang menganalisis..."):
+    if user_input and model is not None and tokenizer is not None:
+        with st.spinner("Sedang berpikir..."):
             # A. Bersihkan Teks
             text_clean = clean_text(user_input)
             
-            # B. Prediksi
-            text_vec = vectorizer.transform([text_clean])
-            prediksi_angka = model.predict(text_vec)[0]
+            # B. Ubah ke Sequence (Angka) - KHUSUS LSTM
+            # Tokenizing
+            seq = tokenizer.texts_to_sequences([text_clean])
+            # Padding (agar panjangnya sama = 50, sesuai training)
+            X_input = pad_sequences(seq, maxlen=50)
             
-            # C. Mapping Label
+            # C. Prediksi
+            prediksi_array = model.predict(X_input)
+            prediksi_index = np.argmax(prediksi_array, axis=1)[0]
+            confidence = np.max(prediksi_array) * 100 # Tingkat keyakinan (%)
+
+            # D. Mapping Label (Sesuai Training Terakhir)
+            # Urutan: 0=Marah, 1=Netral, 2=Sedih, 3=Senang
             label_map = {
-                0: "Cemas 😰", 
-                1: "Marah 😡", 
-                2: "Netral 😐", 
-                3: "Optimis 🌟", 
-                4: "Sedih 😢", 
-                5: "Senang 😄"
+                0: "Marah 😡",
+                1: "Netral 😐",
+                2: "Sedih 😢",
+                3: "Senang 😄"
             }
-            hasil_teks = label_map.get(int(prediksi_angka), "Tidak Diketahui")
             
-            # D. Tampilkan Hasil
-            st.success("Selesai!")
-            st.metric("Emosi Terdeteksi", hasil_teks)
+            hasil_teks = label_map.get(prediksi_index, "Tidak Diketahui")
             
+            # E. Tampilkan Hasil
+            st.divider()
+            if prediksi_index == 3: # Senang
+                st.success(f"Hasil: **{hasil_teks}**")
+            elif prediksi_index == 1: # Netral
+                st.info(f"Hasil: **{hasil_teks}**")
+            else: # Marah/Sedih
+                st.error(f"Hasil: **{hasil_teks}**")
+            
+            st.caption(f"Tingkat Keyakinan AI: {confidence:.2f}%")
+
             with st.expander("Lihat Detail Proses"):
                 st.write("**Teks Asli:**", user_input)
                 st.write("**Teks Bersih:**", text_clean)
+                st.write("**Data Sequence (Input ke LSTM):**", seq)
+
     elif model is None:
-        st.error("Model tidak ditemukan! Pastikan file .pkl sudah diupload ke GitHub.")
+        st.error("❌ File model_lstm.h5 atau tokenizer_lstm.pkl tidak ditemukan! Pastikan sudah diupload.")
     else:
-        st.warning("Silakan masukkan teks terlebih dahulu.")
+        st.warning("⚠️ Silakan masukkan teks terlebih dahulu.")
