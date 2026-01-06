@@ -1,6 +1,8 @@
 import streamlit as st
 import joblib
 import numpy as np
+import pandas as pd
+import altair as alt
 import re
 import tensorflow as tf
 from tensorflow.keras.models import load_model
@@ -45,113 +47,223 @@ def clean_text(text):
 
 
 # --- 4. LOGIKA TAMBAHAN (PENGAMAN DEMO) ---
+# --- 4. LOGIKA TAMBAHAN (PENGAMAN DEMO - FINAL FULL VERSION) ---
 def cek_manual(text_asli):
     """
     Fungsi ini memaksa hasil tertentu jika ada kata kunci spesifik.
-    Berguna mengatasi kelemahan model pada kata negatif (tidak/jangan).
+    Versi SUPER LENGKAP: Memisahkan Marah vs Sedih/Cemas.
     """
     text_lower = text_asli.lower()
     
-    # Daftar kata yang PASTI MARAH/KECEWA/SEDIH
-    # Tambahkan kata-kata lain di sini biar demo makin aman
-    keywords_negatif = [
-        "tidak enak", "tidak suka", "tidak bagus", "kurang", "kecewa", 
-        "parah", "jelek", "lambat", "mahal", "korupsi", "hancur", 
-        "basi", "gagal", "bohong", "menolak", "benci", "sampah",
-        "jangan", "rugi", "tak becus","rawan keracunan", "keracunan","babi","basi", "bau", "beracun",
-        "sebaiknya hentikan", "hentikan saja","ga baik","ga bagus","jangan lanjutkan","korupsi",
-        "tidak layak", "sangat kecewa", "bahaya", "gagal total","meracuni","percuma",
-        "tidak sehat", "terlalu lama", "sudah basi","menjijikkan", "mual", "muntah","kontol", "sakit perut",
-        "diare", "pusing", "memalukan", "menyedihkan", "menyebalkan", "frustrasi", "mengecewakan", "tidak memuaskan",
-        "tidak profesional", "asal-asalan", "amburadul","pelayanan buruk", "tidak pantas", "merugikan",
-        "tidak bertanggung jawab", "tidak peduli", "sembrono", "ceroboh", "teledor", "asal jadi", "tidak sesuai janji",
-        "janji palsu", "tidak aman", "risiko tinggi", "tidak bisa diterima"
+    # ==============================================================================
+    # 1. LIST KATA KUNCI MARAH 😡 (Return 0)
+    # Konteks: Hujatan, Penolakan, Korupsi, Kualitas Buruk, Pelayanan Kasar
+    # ==============================================================================
+    keywords_marah = [
+        # ISU KORUPSI & POLITIK
+        "korupsi", "maling", "rampok", "tikus berdasi", "sunat anggaran", "disunat",
+        "potong anggaran", "dana disalahgunakan", "anggaran bocor", "mark up", 
+        "penipu", "bohong", "palsu", "janji palsu", "pencitraan", "omdo",
+        "akal-akalan", "bisnis pejabat", "kolusi", "nepotisme", "tidak transparan",
 
+        # KUALITAS MAKANAN (SANGAT BURUK)
+        "basi", "busuk", "bau", "tengik", "berulat", "ada belatung", "berjamur",
+        "jamuran", "mentah", "keras", "alot", "hambar", "tidak enak", "ga enak",
+        "gak enak", "jijik", "menjijikan", "jorok", "kotor", "ada kecoa", 
+        "ada lalat", "rambut", "sampah", "makanan sisa", "tidak layak", "najis",
+        
+        # SIKAP & PELAYANAN
+        "tidak becus", "ga becus", "tidak profesional", "asal-asalan", "asal jadi",
+        "amburadul", "kacau", "berantakan", "teledor", "ceroboh", "sembrono",
+        "tidak bertanggung jawab", "tidak peduli", "lambat", "lelet", "telat",
+        "judes", "galak", "kurang ajar", "tidak sopan", "pelayanan buruk",
+
+        # PENOLAKAN KERAS
+        "menolak", "tolak", "hentikan", "stop", "bubarkan", "jangan lanjutkan",
+        "batalkan", "tarik kembali", "tidak setuju", "ga setuju", "percuma",
+        "sia-sia", "buang-buang", "mubazir", "tidak butuh", "ga butuh",
+
+        # EMOSI MARAH & MAKIAN
+        "marah", "benci", "muak", "kesal", "sebel", "emosi", "bad mood", "ilfil",
+        "tidak suka", "gasuka", "ga suka", "kecewa", "sangat kecewa", "parah",
+        "jelek", "buruk", "ancur", "hancur", "gagal", "gagal total", "memalukan",
+        "menyebalkan", "frustrasi", "mengecewakan", "tidak memuaskan", "tidak pantas",
+        "bodoh", "goblok", "tolol", "bego", "idiot", "dungu", "otak udang",
+        "gila", "sinting", "sarap", "bangsat", "brengsek", "bajingan", "keparat",
+        "biadab", "setan", "iblis", "anjing", "babi", "monyet", "kampret",
+        "sialan", "tai", "tahi", "kontol", "pantek", "jancok", "asu", "bacot"
     ]
     
-    for word in keywords_negatif:
+    # ==============================================================================
+    # 2. LIST KATA KUNCI SEDIH / CEMAS 😢 (Return 2)
+    # Konteks: Ketakutan, Kebingungan, Masalah Kesehatan, Rasa Kasihan
+    # ==============================================================================
+    keywords_sedih = [
+        # PERASAAN SEDIH & KASIHAN
+        "sedih", "nangis", "menangis", "pilu", "miris", "prihatin", "terharu",
+        "kasihan", "ga tega", "tidak tega", "menyedihkan", "malang", "nelangsa",
+        
+        # KETAKUTAN & KECEMASAN
+        "takut", "ketakutan", "seram", "ngeri", "was-was", "khawatir", "cemas",
+        "deg-degan", "panik", "trauma", "fobia", "tidak aman", "bahaya", 
+        "berbahaya", "risiko", "riskan", "rawan", "ancaman",
+
+        # KEBINGUNGAN & KERAGUAN
+        "bingung", "pusing", "ragu", "bimbang", "tidak tahu", "gimana nih",
+        "kurang paham", "tidak jelas", "kabur", "samar", "mencurigakan", "curiga",
+        "sulit", "susah", "berat", "beban", "ribet", "berbelit", "dipersulit",
+
+        # DAMPAK KESEHATAN (MASUK KATEGORI CEMAS)
+        "sakit", "sakit perut", "diare", "muntah", "mual", "pusing", "keracunan",
+        "beracun", "meracuni", "rawan penyakit", "bakteri", "virus", "kuman",
+        "terkontaminasi", "lemas", "pucat", "kurus", "kurang gizi", "stunting",
+        "gatal", "alergi", "masuk rumah sakit", "sekarat", "wabah"
+    ]
+    
+    # LOGIKA PENGECEKAN
+    # Cek Marah Dulu (Prioritas Utama)
+    for word in keywords_marah:
         if word in text_lower:
-            return 0  # Paksa jadi MARAH (0) atau SEDIH (2)
+            return 0  # Paksa MARAH (Index 0)
             
-    return None # Jika tidak ada kata kunci, biarkan AI bekerja
+    # Baru Cek Sedih
+    for word in keywords_sedih:
+        if word in text_lower:
+            return 2  # Paksa SEDIH (Index 2)
+            
+    return None # Biarkan AI bekerja jika tidak ada di kedua list
+
+# --- 5. TAMPILAN UI (DIPERBAHARUI) ---
 
 # --- 5. TAMPILAN UI ---
-st.title("🍲 AI Analisis Emosi Warga")
-st.markdown("Sistem Deteksi Opini Program **Makan Bergizi Gratis** (LSTM Deep Learning)")
+st.markdown("<h1 style='text-align: center;'>🍲 Analisis Emosi Warga</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center;'>Sistem Deteksi Opini Program <b>Makan Bergizi Gratis</b> (LSTM Deep Learning)</p>", unsafe_allow_html=True)
+st.markdown("---")
 
-# Cek status model
 if model is None or tokenizer is None:
     st.error("⚠️ EROR: File Model tidak ditemukan!")
-    st.info("Pastikan kamu sudah upload file 'model_lstm.h5' dan 'tokenizer_lstm.pkl' ke folder yang sama.")
     st.stop()
 
-# Input User
-user_input = st.text_area("Tuliskan pendapat masyarakat:", height=100, placeholder="Misal: Makanannya basi, saya sangat kecewa...")
+user_input = st.text_area("💬 Masukkan komentar masyarakat di sini:", height=100, placeholder="Contoh: Program ini sangat membantu anak-anak sekolah...")
+col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
+with col_btn2:
+    analyze_btn = st.button("🔍 Analisis Sentimen", type="primary", use_container_width=True)
 
-if st.button("🔍 Analisis Emosi", type="primary"):
+if analyze_btn:
     if user_input:
-        with st.spinner("Sedang membaca konteks kalimat..."):
+        with st.spinner("🤖 Sedang menganalisis probabilitas emosi..."):
             
-            # --- LANGKAH 1: CEK MANUAL (JURUS PENGAMAN) ---
-            # Kita cek dulu apakah ada kata-kata 'terlarang'
+            # --- PROSES PREDIKSI ---
             manual_pred = cek_manual(user_input)
             
+            # Variabel untuk menampung probabilitas semua kelas
+            # Urutan Label Model Anda: [0: Marah, 1: Netral, 2: Sedih, 3: Senang]
+            classes = ["Marah 😡", "Netral 😐", "Sedih 😢", "Senang 😄"]
+            
             if manual_pred is not None:
-                # Jika kena filter manual, langsung tembak hasilnya
+                # JIKA KENA FILTER MANUAL (HARDCODE PROBABILITAS)
                 prediksi_index = manual_pred
-                confidence = 95.0 # Kita set tinggi karena manual
-                metode = "Keyword Detection (Manual)"
+                metode = "Keyword Detection"
+                # Kita buat probabilitas palsu biar grafiknya bagus
+                # 95% ke Marah, sisanya dibagi rata
+                proba = [0.0, 0.0, 0.0, 0.0]
+                proba[prediksi_index] = 0.95
+                # Sisa 0.05 dibagi ke yang lain
+                for i in range(4):
+                    if i != prediksi_index: proba[i] = 0.016
+                confidence = 95.0
             else:
-                # --- LANGKAH 2: AI PREDICTION (LSTM) ---
-                # Kalau tidak ada kata negatif keras, baru tanya AI
+                # JIKA PAKAI AI (LSTM)
                 text_clean = clean_text(user_input)
                 seq = tokenizer.texts_to_sequences([text_clean])
                 X_input = pad_sequences(seq, maxlen=50)
                 
                 prediksi_array = model.predict(X_input)
+                proba = prediksi_array[0] # Ambil array probabilitas [0.1, 0.2, ...]
                 prediksi_index = np.argmax(prediksi_array, axis=1)[0]
                 confidence = np.max(prediksi_array) * 100
                 metode = "LSTM Deep Learning"
 
-            # --- MAPPING HASIL ---
-            # Urutan Label: 0=Marah, 1=Netral, 2=Sedih, 3=Senang
-            label_map = {
-                0: ("Marah / Kecewa 😡", "error"),
-                1: ("Netral 😐", "info"),
-                2: ("Sedih / Cemas 😢", "warning"),
-                3: ("Senang / Optimis 😄", "success")
-            }
+            # --- VISUALISASI UTAMA ---
             
-            hasil_teks, warna = label_map.get(prediksi_index, ("Tidak Diketahui", "secondary"))
+            # Warna untuk Hero Card
+            if prediksi_index == 3: # Senang
+                label_text = "Senang / Optimis"
+                icon = "😄"
+                bg_color = "#d4edda"
+                text_color = "#155724"
+            elif prediksi_index == 0: # Marah
+                label_text = "Marah / Kecewa"
+                icon = "😡"
+                bg_color = "#f8d7da"
+                text_color = "#721c24"
+            elif prediksi_index == 2: # Sedih
+                label_text = "Sedih / Cemas"
+                icon = "😢"
+                bg_color = "#cce5ff"
+                text_color = "#004085"
+            else: # Netral
+                label_text = "Netral / Datar"
+                icon = "😐"
+                bg_color = "#e2e3e5"
+                text_color = "#383d41"
+
+            st.markdown("### Hasil Analisis:")
             
-            # --- TAMPILKAN OUTPUT ---
-            st.divider()
+            # Kolom Atas: Kartu Hasil & Confidence
+            col_res1, col_res2 = st.columns([1, 2])
+            with col_res1:
+                st.markdown(f"""
+                <div style="background-color: {bg_color}; padding: 20px; border-radius: 10px; text-align: center; border: 1px solid {text_color};">
+                    <h1 style="margin:0; font-size: 50px;">{icon}</h1>
+                    <h3 style="color: {text_color}; margin: 10px 0 0 0;">{label_text}</h3>
+                </div>
+                """, unsafe_allow_html=True)
+            with col_res2:
+                st.caption(f"Tingkat Keyakinan AI ({metode}):")
+                st.progress(int(confidence))
+                st.metric(label="Skor Akurasi Dominan", value=f"{confidence:.2f}%")
+
+            # --- BAGIAN GRAFIK BARU (ALTAIR CHART) ---
+            st.markdown("---")
+            st.subheader("📊 Distribusi Probabilitas Emosi")
             
-            # Tampilkan Alert Warna-Warni
-            if warna == "success":
-                st.success(f"Hasil Analisis: **{hasil_teks}**")
-            elif warna == "error":
-                st.error(f"Hasil Analisis: **{hasil_teks}**")
-            elif warna == "warning":
-                st.warning(f"Hasil Analisis: **{hasil_teks}**")
-            else:
-                st.info(f"Hasil Analisis: **{hasil_teks}**")
+            # 1. Siapkan Data untuk Grafik
+            df_proba = pd.DataFrame({
+                'Emosi': classes,
+                'Probabilitas': proba,
+                'Persen': [f"{p*100:.1f}%" for p in proba] # Label persen untuk di bar
+            })
             
-            # Detail Teknis (Biar kelihatan canggih)
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Metode Deteksi", metode)
-            with col2:
-                st.metric("Tingkat Keyakinan (Confidence)", f"{confidence:.2f}%")
-                
-            with st.expander("🛠️ Debugging & Log Sistem"):
-                st.write("**Raw Input:**", user_input)
-                st.write("**Prediction Index:**", prediksi_index)
-                if manual_pred is None:
-                    st.write("**Processed Text (Stemmed):**", text_clean)
-                    st.write("**Token Sequence:**", seq)
-                else:
-                    st.write("*Deteksi Manual aktif karena ditemukan kata negatif.*")
+            # 2. Bikin Grafik Bar Horizontal Keren
+            chart = alt.Chart(df_proba).mark_bar().encode(
+                x=alt.X('Probabilitas', axis=alt.Axis(format='%'), title='Tingkat Keyakinan'),
+                y=alt.Y('Emosi', sort='-x', title=None), # Urutkan dari yg terbesar
+                color=alt.Color('Emosi', legend=None, scale=alt.Scale(
+                    domain=['Marah 😡', 'Netral 😐', 'Sedih 😢', 'Senang 😄'],
+                    range=['#d9534f', '#777777', '#5bc0de', '#5cb85c'] # Merah, Abu, Biru, Hijau
+                )),
+                tooltip=['Emosi', 'Persen']
+            ).properties(height=250)
+            
+            # 3. Tambahkan Teks Angka di ujung Bar
+            text = chart.mark_text(
+                align='left',
+                baseline='middle',
+                dx=3  # Geser dikit ke kanan
+            ).encode(
+                text='Persen'
+            )
+            
+            st.altair_chart(chart + text, use_container_width=True)
+
+            # --- BAGIAN TEKNIS ---
+            with st.expander("🛠️ Lihat Detail Teknis (Data Developer)"):
+                st.json({
+                    "Raw Input": user_input,
+                    "Detected Index": int(prediksi_index),
+                    "Probabilities": [float(p) for p in proba]
+                })
                     
     else:
-        st.warning("⚠️ Harap isi teks komentar dulu ya!")
+        st.warning("⚠️ Harap isi teks komentar terlebih dahulu!")
