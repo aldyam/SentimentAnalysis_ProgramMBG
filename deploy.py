@@ -33,14 +33,16 @@ stemmer = factory_stem.create_stemmer()
 
 def clean_text(text):
     text = str(text).lower()
-    text = re.sub(r'@[A-Za-z0-9_]+', '', text) 
-    text = re.sub(r'#\w+', '', text)           
-    text = re.sub(r'http\S+', '', text)        
-    text = re.sub(r'[^a-z\s]', ' ', text)       
+    text = re.sub(r'@[A-Za-z0-9_]+', '', text)
+    text = re.sub(r'#\w+', '', text)
+    text = re.sub(r'http\S+', '', text)
+    text = re.sub(r'[^a-z\s]', ' ', text)
     text = re.sub(r'\s+', ' ', text).strip()
-    text = stopword.remove(text)
-    text = stemmer.stem(text) 
+    text = stopword.remove(text) 
+    text = stemmer.stem(text)
+    
     return text
+
 
 # --- 4. LOGIKA TAMBAHAN (PENGAMAN DEMO) ---
 def cek_manual(text_asli):
@@ -56,7 +58,15 @@ def cek_manual(text_asli):
         "tidak enak", "tidak suka", "tidak bagus", "kurang", "kecewa", 
         "parah", "jelek", "lambat", "mahal", "korupsi", "hancur", 
         "basi", "gagal", "bohong", "menolak", "benci", "sampah",
-        "jangan", "rugi", "tak becus"
+        "jangan", "rugi", "tak becus","rawan keracunan", "keracunan","babi","basi", "bau", "beracun",
+        "sebaiknya hentikan", "hentikan saja","ga baik","ga bagus","jangan lanjutkan","korupsi",
+        "tidak layak", "sangat kecewa", "bahaya", "gagal total","meracuni","percuma",
+        "tidak sehat", "terlalu lama", "sudah basi","menjijikkan", "mual", "muntah","kontol", "sakit perut",
+        "diare", "pusing", "memalukan", "menyedihkan", "menyebalkan", "frustrasi", "mengecewakan", "tidak memuaskan",
+        "tidak profesional", "asal-asalan", "amburadul","pelayanan buruk", "tidak pantas", "merugikan",
+        "tidak bertanggung jawab", "tidak peduli", "sembrono", "ceroboh", "teledor", "asal jadi", "tidak sesuai janji",
+        "janji palsu", "tidak aman", "risiko tinggi", "tidak bisa diterima"
+
     ]
     
     for word in keywords_negatif:
